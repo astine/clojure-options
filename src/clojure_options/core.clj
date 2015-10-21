@@ -1,6 +1,12 @@
 (ns clojure-options.core
   (:require [clojure.set :refer :all]))
 
+(defn alpha-numeric? [char]
+  (assert (char? char))
+  (or (< 47 (int option) 58) ;if option alphanumeric
+      (< 64 (int option) 91)
+      (< 96 (int option) 123)))
+
 (defn map-parsed-options
   "A function that parses a list of command line tokens according to a set of 
   conditions and allows the user to operate on them as a series of key/value pairs.
@@ -103,9 +109,7 @@
                parameter-options #{}]
           (let [option (first short-options)]
             (if (and (not (nil? option))
-                     (or (< 47 (int option) 58) ;if option alphanumeric
-                         (< 64 (int option) 91)
-                         (< 96 (int option) 123)))
+                     (alpha-numeric? (int option)))
               (if (= (second short-options) \:)
                 (recur (subs short-options 2)
                        boolean-options
