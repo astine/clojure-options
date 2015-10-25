@@ -218,5 +218,5 @@
                                   ~boolean-options#
                                   ~parameter-options#)]
        (let [~@(mapcat #(vector % `(when ~% (~(:parser (all-options# (name %))) ~%)))
-                       (concat spec free-options#))] 
+                       (concat spec (when (coll? free-options#) free-options#)))] 
          ~@body))))

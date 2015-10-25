@@ -26,7 +26,7 @@ let-cli-options
 
      (let-cli-options [alpha ^String file & free-tokens] tokens
        [alpha file free-tokens])
-      => [true "return.txt" ["loop.txt"]]
+      => [true "return.txt" ("loop.txt" "stay.txt")]
 
 ## License
 
