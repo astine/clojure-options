@@ -1,7 +1,7 @@
 (ns clojure-options.core
-  (:require [clojure.set :refer :all]))
+  (:require [clojure.string :refer [join]]))
 
-(defn alpha-numeric?
+(defn- alpha-numeric?
   "Returns true if char is an alphanumeric character."
   [char]
   (assert (char? char) (str char " is not alphanumeric"))
@@ -9,7 +9,7 @@
       (< 64 (int char) 91)
       (< 96 (int char) 123)))
 
-(defn reduce-parsed-options
+(defn- reduce-parsed-options
   "A function that parses a list of command line tokens according to a set of 
   conditions and feeds the resulting option pairs to a reducer function provided
   by the caller.
@@ -129,15 +129,94 @@
                   [boolean-options parameter-options])))))]
     (let [[options free]
           (reduce-parsed-options
-           (fn [output [option value]]
-             (let [[options free] output]
-               (cond (= value :free)
-                     [options (conj free option)]
-                     (= value :boolean)
-                     [(conj options option) free]
-                     :else
-                     [(conj (conj options option) value) free])))
+           (fn [[options free] [option value]]
+             (cond (= value :free)
+                   [options (conj free option)]
+                   (= value :boolean)
+                   [(conj options option) free]
+                   :else
+                   [(conj (conj options option) value) free]))
            [[] []]
            tokens boolean-options parameter-options)]
       (concat options ["--"] free))))
+
+(defn- map-tag-to-parser [tag]
+  (case tag
+    String identity
+    long '(fn [str] (Long. str))
+    double '(fn [str] (Double. str))
+    nil '(constantly true)
+    identity))
                               
+(defn- parse-spec-to-options
+  "This function parses an option spec."
+  [spec]
+  (loop [spec spec
+         boolean-options #{}
+         parameter-options #{}
+         all-options {}]
+    (let [option (first spec)
+          {:keys [tag]} (meta option)]
+      (cond (nil? option)
+            {:boolean-options boolean-options
+             :parameter-options parameter-options
+             :all-options all-options
+             :free-options 'free-options}
+            (= option '&)
+            {:boolean-options boolean-options
+             :parameter-options parameter-options
+             :all-options (if (coll? (second spec))
+                            (reduce #(assoc %1 (name %2)
+                                            (assoc (meta %2)
+                                              :keyword (keyword %2)
+                                              :parser (map-tag-to-parser (:tag (meta %2)))))
+                                    all-options (second spec))
+                            all-options)
+             :free-options (second spec)}
+            :else
+            (let [token (name option)
+                  ;;make sure that there are no duplicate short tokens by skipping older ones
+                  short-token (->> (int (first token))
+                                   (iterate inc)
+                                   (map (comp str char))
+                                   (remove all-options)
+                                   first)
+                  option (assoc (meta option)
+                           :keyword (keyword option)
+                           :parser (map-tag-to-parser tag))
+                  all-options (assoc all-options token option short-token option)]
+              (if (nil? tag)
+                (recur (rest spec)
+                       (conj (conj boolean-options token) short-token)
+                       parameter-options
+                       all-options)
+                (recur (rest spec)
+                       boolean-options
+                       (conj (conj parameter-options token) short-token)
+                       all-options)))))))
+
+(defmacro let-cli-options
+  "This macro binds cli options to variables"
+  [spec tokens & body]
+  (let [{boolean-options# :boolean-options
+         parameter-options# :parameter-options
+         all-options# :all-options
+         free-options# :free-options}
+        (parse-spec-to-options spec)
+        spec (take-while #(not (= '& %)) spec)]
+    `(let [~(assoc (zipmap spec (map keyword spec)) free-options# :free)
+           (reduce-parsed-options (fn [output# [option# value#]]
+                                    (if (= value# :free)
+                                      (assoc output#
+                                        :free
+                                        (conj (:free output#) option#))
+                                      (assoc output#
+                                        (:keyword (~all-options# option#))
+                                        value#)))
+                                  {}
+                                  ~tokens
+                                  ~boolean-options#
+                                  ~parameter-options#)]
+       (let [~@(mapcat #(vector % `(when ~% (~(:parser (all-options# (name %))) ~%)))
+                       (concat spec free-options#))] 
+         ~@body))))
