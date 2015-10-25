@@ -16,6 +16,18 @@ getopts
       =>  ["a" "f" "go.txt" "alpha" "file" "return.txt" "--"
            "stay.txt" "loop.txt"]
 
+let-cli-options
+  A simple interface for binding cli options. Simply provide a list of variable
+  names that you want let-bound and clojure-options will figure out the right
+  way to parse the cli tokens.
+
+     tokens = ["-afgo.txt" "--alpha" "stay.txt"
+               "--file" "return.txt" "loop.txt"]
+
+     (let-cli-options [alpha ^String file & free-tokens] tokens
+       [alpha file free-tokens])
+      => [true "return.txt" ["loop.txt"]]
+
 ## License
 
 Copyright © 2015 FIXME
