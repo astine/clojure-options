@@ -140,7 +140,9 @@
            tokens boolean-options parameter-options)]
       (concat options ["--"] free))))
 
-(defn- map-tag-to-parser [tag]
+(defn- map-tag-to-parser
+  "Maps a type hint to an appropriate parser function."
+  [tag]
   (case tag
     String identity
     long '(fn [str] (Long. str))
@@ -149,7 +151,22 @@
     identity))
                               
 (defn- parse-spec-to-options
-  "This function parses an option spec."
+  "This function parses a user provided option spec of the form:
+  
+  [alpha ^String beta & [in-file out-file]]
+  
+  to a number of data structures needed for correctly parsing cli tokens.
+  The output is a hash with these keys:
+  -- :boolean-options - A list of strings to be passed to 'reduce-parsed-options'
+  -- :parameter-options - A list of strings to be passed to 'reduce-parsed-options'
+  -- :all-options - A map where the keys are tokens from 'boolean-options' and
+       'parameter-options' the values are more detailed option specifications. The 
+       specifications are derived from meta data provided in the original option
+       spec. The type hint options are used to derive parsers for the cli token
+       parameters.
+  -- :free-options - Either a symbol to be used as the name of the variable to 
+       contain a list of all of the free tokens, or a list of such symbols to be
+       bound individually to the same free tokens."
   [spec]
   (loop [spec spec
          boolean-options #{}
@@ -169,10 +186,11 @@
                             (reduce #(assoc %1 (name %2)
                                             (assoc (meta %2)
                                               :keyword (keyword %2)
-                                              :parser (map-tag-to-parser (:tag (meta %2)))))
+                                              :parser (map-tag-to-parser
+                                                       (or (:tag (meta %2)) String))))
                                     all-options (second spec))
                             all-options)
-             :free-options (second spec)}
+             :free-options (or (second spec) 'free-options)}
             :else
             (let [token (name option)
                   ;;make sure that there are no duplicate short tokens by skipping older ones
@@ -196,7 +214,11 @@
                        all-options)))))))
 
 (defmacro let-cli-options
-  "This macro binds cli options to variables"
+  "This macro binds cli options to variables according to the provided spec.
+  In the simplest case, a list of variable names are provided and this macro
+  will figure out how to bind the provided tokens to them. In more complex
+  situations, type hints, doc strings and free token bindings can be provided
+  to provide more flexibility."
   [spec tokens & body]
   (let [{boolean-options# :boolean-options
          parameter-options# :parameter-options
@@ -217,6 +239,6 @@
                                   ~tokens
                                   ~boolean-options#
                                   ~parameter-options#)]
-       (let [~@(mapcat #(vector % `(when ~% (~(:parser (all-options# (name %))) ~%)))
-                       (concat spec (when (coll? free-options#) free-options#)))] 
+       (let [~@(mapcat #(vector % `(when ~% (~(or (:parser (all-options# (name %))) identity) ~%)))
+                       (concat spec (if (coll? free-options#) free-options# [free-options#])))] 
          ~@body))))
