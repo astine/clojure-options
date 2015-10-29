@@ -17,19 +17,21 @@
 (defn- parameter-string
   [tag]
   (case tag
-    String " STRING"
-    long " NUM"
-    double " NUM"
-    nil ""
-    :else ""))
+    String "STRING"
+    long "NUM"
+    double "NUM"
+    nil nil
+    :else nil))
 
 (def ^:private token-string
   (memoize
-   (fn [tokens tag]
+   (fn [{:keys [tokens tag default]}]
      (str "  "
-          (join " " (map #(str (if (> (count %) 1) "--" "-") %)
-                         (sort-by count tokens)))
-          (parameter-string tag)
+          (join " " (remove nil?
+                            (concat (map #(str (if (> (count %) 1) "--" "-") %)
+                                         (sort-by count tokens))
+                                    (list (parameter-string tag)
+                                          default))))
           "  "))))
 
 (defn- maplist [fn list]
@@ -43,7 +45,7 @@
 
 (defn- option-usage-string
   [option & [description-start max-length]]
-  (let [token-string (token-string (:tokens option) (:tag option))
+  (let [token-string (token-string option)
         description-start (max (or description-start 25) (count token-string))
         max-length (or max-length 100)]
     (str 
@@ -69,7 +71,7 @@
   (assert (map? options))
   (let [options (normalize-options options)
         description-start (apply max
-                                 (map #(count (token-string (:tokens %) (:tag %)))
+                                 (map (comp count token-string)
                                       options))]
     (join ""
           (map #(option-usage-string % description-start max-line-length)

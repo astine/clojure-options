@@ -239,6 +239,7 @@
                                   ~tokens
                                   ~boolean-options#
                                   ~parameter-options#)]
-       (let [~@(mapcat #(vector % `(when ~% (~(or (:parser (all-options# (name %))) identity) ~%)))
+       (let [~@(mapcat #(vector % `(if ~% (~(or (:parser (all-options# (name %))) identity) ~%)
+                                       ~(:default (all-options# (name %)))))
                        (concat spec (if (coll? free-options#) free-options# [free-options#])))] 
          ~@body))))
