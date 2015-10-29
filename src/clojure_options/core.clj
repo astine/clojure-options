@@ -73,7 +73,7 @@
                  (cond (some #{\=} token)
                        (let [[option parameter] (clojure.string/split token #"=")]
                          (cond (parameter-options (subs option 2))
-                               (recur (rest tokens) (reducer output [option parameter]) errors)
+                               (recur (rest tokens) (reducer output [(subs option 2) parameter]) errors)
                                (boolean-options (subs token 2))
                                (recur (rest tokens) output (conj errors (str "Warning: Used '=' with option that doesn't take a parameter: '" option "'")))
                                :else (recur (rest tokens) output (conj errors (str "Warning: Invalid option '" option "'")))))
@@ -122,7 +122,7 @@
                     (if (= (last option) \=)
                       (recur (rest long-options)
                              boolean-options
-                             (conj parameter-options option))
+                             (conj parameter-options (subs option 0 (dec (count option)))))
                       (recur (rest long-options)
                              (conj boolean-options option)
                              parameter-options)))
@@ -212,7 +212,7 @@
                        boolean-options
                        (conj (conj parameter-options token) short-token)
                        all-options)))))))
-
+     
 (defmacro let-cli-options
   "This macro binds cli options to variables according to the provided spec.
   In the simplest case, a list of variable names are provided and this macro
