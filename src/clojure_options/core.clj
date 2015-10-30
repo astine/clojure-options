@@ -9,6 +9,34 @@
       (< 64 (int char) 91)
       (< 96 (int char) 123)))
 
+
+;;Two kinds of exceptions:
+;;Those generated from bad input
+;;Those generated from bad code
+;;The former type should not stop the parser, should handleable by the program, and should have a reasonable default response
+;;The latter type should break from the parser and generate an error message right away.
+;; 'ExceptionInfo' exceptions with the ':type' value ':parser-error', are used for the former type.
+
+(defmacro ^:private try-reducer [new-tokens new-output errors]
+  `(let [{tokens# :tokens output# :output errors# :errors}
+         (try
+           {:tokens ~new-tokens
+            :output ~new-output
+            :errors ~errors}
+           (catch clojure.lang.ExceptionInfo ei#
+             (if (= (:type (ex-data ei#)) :parser-error)
+               {:tokens ~new-tokens
+                :output ~'output
+                :errors (conj ~errors (.getMessage ei#))}
+               (throw ei#))))]
+     (recur tokens# output# errors#)))
+
+(defn throw-parser-error
+  "Throws an parser error exception. The parser will collect these exceptions and throw all 
+  of them at once when it is done parsing."
+  [message]
+  (throw (ex-info message {:type :parser-error})))
+
 (defn- reduce-parsed-options
   "A function that parses a list of command line tokens according to a set of 
   conditions and feeds the resulting option pairs to a reducer function provided
@@ -36,55 +64,72 @@
   ([reducer tokens boolean-options parameter-options]
    (reduce-parsed-options reduce nil tokens boolean-options parameter-options))
   ([reducer val tokens boolean-options parameter-options]
-   (assert (set? boolean-options))
-   (assert (set? parameter-options))
-     (loop [tokens tokens
-            output val
-            errors []]
-       (let [token (first tokens)]
-           (cond (empty? token)
-                 (if (empty? errors)
-                   output
-                   (throw (ex-info (join "\n" errors) {:output output})))
-                 (= token "--")
-                 (if (empty? errors)
-                   (reduce reducer output (map vector (rest tokens) (repeat :free)))
-                   (throw (ex-info (join "\n" errors) {:output (reduce reducer output (map vector (rest tokens) (repeat :free)))})))
-                 (= token "-")
-                 (recur (rest tokens) (reducer output [token :free]) errors)
-                 (and (= (first token) \-)
-                      (not (= (second token) \-)))
-                                        ;short options are broken up and iterated over seperately
-                 (let [option (str (second token))]
-                   (cond (parameter-options option)
-                         (if (<= (count token) 2)
-                           (recur (drop 2 tokens) (reducer output [option (second tokens)]) errors)
-                           (recur (rest tokens) (reducer output [option (subs token 2)]) errors))
-                         (boolean-options option)
-                         (if (<= (count token) 2)
-                           (recur (rest tokens) (reducer output [option :boolean]) errors)
-                           (recur (cons (str "-" (subs token 2)) (rest tokens))
-                                  (reducer output [option :boolean]) errors))
-                         :else (recur (cons (str "-" (subs token 2)) (rest tokens))
-                                      output
-                                      (conj errors (str "Warning: Invalid option '-" option "'")))))
-                 (and (= (first token) \-)
-                      (= (second token) \-))
-                 (cond (some #{\=} token)
-                       (let [[option parameter] (clojure.string/split token #"=")]
-                         (cond (parameter-options (subs option 2))
-                               (recur (rest tokens) (reducer output [(subs option 2) parameter]) errors)
-                               (boolean-options (subs token 2))
-                               (recur (rest tokens) output (conj errors (str "Warning: Used '=' with option that doesn't take a parameter: '" option "'")))
-                               :else (recur (rest tokens) output (conj errors (str "Warning: Invalid option '" option "'")))))
-                       (parameter-options (subs token 2))
-                       (if (#{"--" "-" nil} (second tokens))
-                         (recur (rest tokens) (reducer output [(subs token 2) nil]) (conj errors (str "Warning: No parameter for option '" token "'")))
-                         (recur (drop 2 tokens) (reducer output [(subs token 2) (second tokens)]) errors))
-                       (boolean-options (subs token 2))
-                       (recur (rest tokens) (reducer output [(subs token 2) :boolean]) errors)
-                       :else (recur (rest tokens) output (conj errors (str "Warning: Invalid option '" token "'"))))
-                 :else (recur (rest tokens) (reducer output [token :free]) errors))))))
+   (assert (and (coll? tokens) (every? string? tokens))
+           (str "Invalid collection of tokens: " tokens))
+   (assert (and (set? boolean-options) (every? string? boolean-options))
+           (str "Invalid set of boolean options: " boolean-options))
+   (assert (and (set? parameter-options) (every? string? parameter-options))
+           (str "Invalid set of parameter options: " parameter-options))
+   (loop [tokens tokens
+          output val
+          errors []]
+     (let [token (first tokens)]
+       (cond (empty? token)
+             (if (empty? errors)
+               output
+               (throw (ex-info (join "\n" (map (partial str "Warning: ") errors)) {:type :parser-error :output output})))
+             (= token "--")
+             (let [[output errors]
+                   (reduce (fn [[output errors] option]
+                             (try
+                               [(reducer output option) errors]
+                               (catch clojure.lang.ExceptionInfo ei
+                                 (if (= (:type (ex-data ei)) :parser-error)
+                                   [output (conj errors (.getMessage ei))]))))
+                           [output errors]
+                           (map vector (rest tokens) (repeat :free)))]
+               (if (empty? errors)
+                 output
+                 (throw (ex-info (join "\n" (map (partial str "Warning: ") errors))
+                                 {:type :parser-error :output output}))))
+             (= token "-")
+             (try-reducer (rest tokens) (reducer output [token :free]) errors)
+             (and (= (first token) \-)
+                  (not (= (second token) \-)))
+                                        ;short options are broken up and iterated over separately
+             (let [option (str (second token))]
+               (cond (parameter-options option)
+                     (if (<= (count token) 2)
+                       (try-reducer (drop 2 tokens) (reducer output [option (second tokens)]) errors)
+                       (try-reducer (rest tokens) (reducer output [option (subs token 2)]) errors))
+                     (boolean-options option)
+                     (if (<= (count token) 2)
+                       (try-reducer (rest tokens) (reducer output [option :boolean]) errors)
+                       (try-reducer (cons (str "-" (subs token 2)) (rest tokens))
+                                    (reducer output [option :boolean]) errors))
+                     :else
+                     (if (<= (count token) 2)
+                       (recur (rest tokens) output (conj errors (str "Invalid option '-" option "'")))
+                       (recur (cons (str "-" (subs token 2)) (rest tokens))
+                              output
+                              (conj errors (str "Invalid option '-" option "'"))))))
+             (and (= (first token) \-)
+                  (= (second token) \-))
+             (cond (some #{\=} token)
+                   (let [[option parameter] (clojure.string/split token #"=")]
+                     (cond (parameter-options (subs option 2))
+                           (try-reducer (rest tokens) (reducer output [(subs option 2) parameter]) errors)
+                           (boolean-options (subs token 2))
+                           (recur (rest tokens) output (conj errors (str "Used '=' with option that doesn't take a parameter: '" option "'")))
+                           :else (recur (rest tokens) output (conj errors (str "Invalid option '" option "'")))))
+                   (parameter-options (subs token 2))
+                   (if (#{"--" "-" nil} (second tokens))
+                     (try-reducer (rest tokens) (reducer output [(subs token 2) nil]) (conj errors (str "No parameter for option '" token "'")))
+                     (try-reducer (drop 2 tokens) (reducer output [(subs token 2) (second tokens)]) errors))
+                   (boolean-options (subs token 2))
+                   (try-reducer (rest tokens) (reducer output [(subs token 2) :boolean]) errors)
+                   :else (recur (rest tokens) output (conj errors (str "Invalid option '" token "'"))))
+             :else (try-reducer (rest tokens) (reducer output [token :free]) errors))))))
   
 (defn getopts
   "A traditional command-line option parser of the same general format as
@@ -243,3 +288,4 @@
                                        ~(:default (all-options# (name %)))))
                        (concat spec (if (coll? free-options#) free-options# [free-options#])))] 
          ~@body))))
+
