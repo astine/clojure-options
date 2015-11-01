@@ -19,10 +19,10 @@ Options:
   [options-hash]
   (vals
    (reduce (fn [options [token option]]
-             (let [old-option ((:key option) options)]
+             (let [old-option ((:keyword option) options)]
                (assoc options (:keyword option)
                       (merge old-option
-                              (assoc option :tokens
+                             (assoc option :tokens
                                     (conj (:tokens old-option)
                                           token))))))
            {}
@@ -36,7 +36,7 @@ Options:
     long "NUM"
     double "NUM"
     nil nil
-    :else nil))
+    nil))
 
 (def ^:private token-string
   (memoize

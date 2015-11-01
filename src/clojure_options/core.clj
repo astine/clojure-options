@@ -1,15 +1,20 @@
 (ns clojure-options.core
-  (:require [clojure.string :refer [join]]))
+  (:require [clojure-options.help :refer :all]
+            [clojure.string :refer [join]]))
 
 ;;; parameters
-(defonce ^:dynamic ^{:doc "A short plaintext description of the application."}
-  *program-description*
+(defonce ^:const ^{:doc "The name of the executable used to launch this application."}
+  +program-name+
   "")
 
-(defonce ^:dynamic ^{:doc (join "\n  " ["If truthy, the parser will insert an implicit 'help' option."
-                                        "If a string or a symbol, the tokens for the option will"
-                                        "be generated from it, else the tokens will be \"h\" and \"help\"."])}
-  *help-option?*
+(defonce ^:const ^{:doc "A short plaintext description of the application."}
+  +program-description+
+  "")
+
+(defonce ^:const ^{:doc (join "\n  " ["If truthy, the parser will insert an implicit 'help' option."
+                                      "If a string or a symbol, the tokens for the option will"
+                                      "be generated from it, else the tokens will be \"h\" and \"help\"."])}
+  +help-option?+
   true)
 
 (defn- alpha-numeric?
@@ -271,7 +276,6 @@
                        (conj (conj parameter-options token) short-token)
                        all-options)))))))
 
-     
 (defmacro let-cli-options
   "This macro binds cli options to variables according to the provided spec.
   In the simplest case, a list of variable names are provided and this macro
@@ -279,27 +283,58 @@
   situations, type hints, doc strings and free token bindings can be provided
   to provide more flexibility."
   [spec tokens & body]
-  (let [{boolean-options# :boolean-options
+  (let [help-token (if (or (string? +help-option?+) (symbol? +help-option?+))
+                     (symbol +help-option?+)
+                     ^{:doc "Show usage summary"} 'help)
+        spec (if +help-option?+ (cons help-token spec) spec)
+        {boolean-options# :boolean-options
          parameter-options# :parameter-options
          all-options# :all-options
          free-options# :free-options}
         (parse-spec-to-options spec)
         spec (take-while #(not (= '& %)) spec)]
-    `(let [~(assoc (zipmap spec (map keyword spec)) free-options# :free)
+    `(try
+       (let [~(assoc (zipmap spec (map keyword spec)) free-options# :free)
            (reduce-parsed-options (fn [output# [option# value#]]
-                                    (if (= value# :free)
-                                      (assoc output#
-                                        :free
-                                        (conj (:free output#) option#))
-                                      (assoc output#
-                                        (:keyword (~all-options# option#))
-                                        value#)))
-                                  {}
-                                  ~tokens
-                                  ~boolean-options#
-                                  ~parameter-options#)]
+                                         (if (= value# :free)
+                                           (assoc output#
+                                             :free
+                                             (conj (:free output#) option#))
+                                           (assoc output#
+                                             (:keyword (~all-options# option#))
+                                             value#)))
+                                       {}
+                                       ~tokens
+                                       ~boolean-options#
+                                       ~parameter-options#)]
        (let [~@(mapcat #(vector % `(if ~% (~(or (:parser (all-options# (name %))) identity) ~%)
                                        ~(:default (all-options# (name %)))))
                        (concat spec (if (coll? free-options#) free-options# [free-options#])))] 
-         ~@body))))
+         ~(if +help-option?+
+            `(if ~help-token
+               (print (help +program-name+ +program-description+ ~all-options#))
+               ~@body)
+            `(do ~@body))))
+       (catch clojure.lang.ExceptionInfo ei#
+         (if (= (:type (ex-data ei#)) :parser-error)
+           (do
+             (println (.getMessage ei#))
+             (print (help +program-name+ +program-description+ ~all-options#)))
+           (throw ei#))))))
 
+(defmacro defmain
+  "This macro defines the main entry point to an application. Given a 'spec'
+  consisting of a list of variable names, and a function body, this macro will
+  return a function that when, passed a list of tokens passed in at the command
+  line, will bind them to the specified variables. The behavior of the parser
+  can be customized with the application of meta-data to the variable names.
+
+  Meta data options:
+  --:tag (aka. type hint) - Specifies a type and a parser for a variable, no :tag
+                            means that the variable does not take a parameter.
+  --:doc - Documentation string to appear in help text.
+  --:default - Default value for the parameter, the default, default value  for
+               all parameters is nil."
+  [spec & body]
+  `(defn -main [~'args]
+     (let-cli-options ~spec ~'args ~@body)))
