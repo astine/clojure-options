@@ -32,9 +32,9 @@ Options:
   "Returns a printable type descriptor for a option tag type."
   [tag]
   (case tag
-    String "STRING"
-    long "NUM"
-    double "NUM"
+    :String "STRING"
+    :long "NUM"
+    :double "NUM"
     nil nil
     nil))
 

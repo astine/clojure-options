@@ -5,11 +5,11 @@
 ;;; parameters
 (defonce ^:const ^{:doc "The name of the executable used to launch this application."}
   +program-name+
-  "")
+  "Executable Name")
 
 (defonce ^:const ^{:doc "A short plaintext description of the application."}
   +program-description+
-  "")
+  "The following are the available options for this application.")
 
 (defonce ^:const ^{:doc (join "\n  " ["If truthy, the parser will insert an implicit 'help' option."
                                       "If a string or a symbol, the tokens for the option will"
@@ -245,11 +245,13 @@
              :parameter-options parameter-options
              :all-options (if (coll? (second spec))
                             (reduce #(assoc %1 (name %2)
-                                            (assoc (meta %2)
-                                              :keyword (keyword %2)
-                                              :free true
-                                              :parser (map-tag-to-parser
-                                                       (or (:tag (meta %2)) String))))
+                                            (let [tag (:tag (meta %2))]
+                                              (assoc (meta %2)
+                                                :keyword (keyword %2)
+                                                :free true
+                                                :tag (when tag (keyword (name tag)))
+                                                :parser (map-tag-to-parser
+                                                         (or tag String)))))
                                     all-options (second spec))
                             all-options)
              :free-options (or (second spec) 'free-options)}
@@ -264,6 +266,7 @@
                   option (assoc (meta option)
                            :keyword (keyword option)
                            :free false
+                           :tag (when tag (keyword (name tag)))
                            :parser (map-tag-to-parser tag))
                   all-options (assoc all-options token option short-token option)]
               (if (nil? tag)
@@ -276,6 +279,16 @@
                        (conj (conj parameter-options token) short-token)
                        all-options)))))))
 
+
+
+(defn rotate-array-map [map quantity]
+  (let [map (if (> quantity 1) 
+              (rotate-array-map map (dec quantity)) 
+              map)
+        [key val] (first map)]
+    (assoc (dissoc map key)
+      key val)))
+
 (defmacro let-cli-options
   "This macro binds cli options to variables according to the provided spec.
   In the simplest case, a list of variable names are provided and this macro
@@ -285,10 +298,10 @@
   [spec tokens & body]
   (let [help-token (if (or (string? +help-option?+) (symbol? +help-option?+))
                      (symbol +help-option?+)
-                     ^{:doc "Show usage summary"} 'help)
+                     (with-meta 'help {:doc "Show usage summary"}))
         spec (if +help-option?+ (cons help-token spec) spec)
         {boolean-options# :boolean-options
-         parameter-options# :parameter-options
+        parameter-options# :parameter-options
          all-options# :all-options
          free-options# :free-options}
         (parse-spec-to-options spec)
@@ -312,14 +325,14 @@
                        (concat spec (if (coll? free-options#) free-options# [free-options#])))] 
          ~(if +help-option?+
             `(if ~help-token
-               (print (help +program-name+ +program-description+ ~all-options#))
+               (print (help +program-name+ +program-description+ (rotate-array-map ~all-options# 2)))
                ~@body)
             `(do ~@body))))
        (catch clojure.lang.ExceptionInfo ei#
          (if (= (:type (ex-data ei#)) :parser-error)
            (do
              (println (.getMessage ei#))
-             (print (help +program-name+ +program-description+ ~all-options#)))
+             (print (help +program-name+ +program-description+ (rotate-array-map ~all-options# 2))))
            (throw ei#))))))
 
 (defmacro defmain
