@@ -206,8 +206,15 @@
   [tag]
   (case tag
     String identity
-    long '(fn [str] (Long. str))
-    double '(fn [str] (Double. str))
+    long '(fn [str#]
+            (try (Long. str#)
+                 (catch NumberFormatException nfe#
+                   (throw-parser-error (str "Invalid long integer: " str#)))))
+    double '(fn [str#]
+            (try (Double. str#)
+                 (catch NumberFormatException nfe#
+                   (throw-parser-error (str "Invalid floating point number: " str#)))))
+    
     nil '(constantly true)
     identity))
                               
@@ -234,7 +241,7 @@
          parameter-options #{}
          all-options {}]
     (let [option (first spec)
-          {:keys [tag]} (meta option)]
+          {:keys [tag parser]} (meta option)]
       (cond (nil? option)
             {:boolean-options boolean-options
              :parameter-options parameter-options
@@ -245,13 +252,14 @@
              :parameter-options parameter-options
              :all-options (if (coll? (second spec))
                             (reduce #(assoc %1 (name %2)
-                                            (let [tag (:tag (meta %2))]
+                                            (let [{:keys [tag parser]} (meta %2)]
                                               (assoc (meta %2)
                                                 :keyword (keyword %2)
                                                 :free true
                                                 :tag (when tag (keyword (name tag)))
-                                                :parser (map-tag-to-parser
-                                                         (or tag String)))))
+                                                :parser (or parser
+                                                            (map-tag-to-parser
+                                                             (or tag String))))))
                                     all-options (second spec))
                             all-options)
              :free-options (or (second spec) 'free-options)}
@@ -267,7 +275,7 @@
                            :keyword (keyword option)
                            :free false
                            :tag (when tag (keyword (name tag)))
-                           :parser (map-tag-to-parser tag))
+                           :parser (or parser (map-tag-to-parser tag)))
                   all-options (assoc all-options token option short-token option)]
               (if (nil? tag)
                 (recur (rest spec)
@@ -320,7 +328,10 @@
                                        ~tokens
                                        ~boolean-options#
                                        ~parameter-options#)]
-       (let [~@(mapcat #(vector % `(if ~% (~(or (:parser (all-options# (name %))) identity) ~%)
+       (let [~@(mapcat #(vector % `(if ~% (try (~(or (:parser (all-options# (name %))) identity) ~%)
+                                               (catch Exception e#
+                                                 (throw-parser-error (str "Error parsing parameter: "
+                                                                      (.getMessage e#)))))
                                        ~(:default (all-options# (name %)))))
                        (concat spec (if (coll? free-options#) free-options# [free-options#])))] 
          ~(if +help-option?+
