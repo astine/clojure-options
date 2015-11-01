@@ -1,6 +1,17 @@
 (ns clojure-options.core
   (:require [clojure.string :refer [join]]))
 
+;;; parameters
+(defonce ^:dynamic ^{:doc "A short plaintext description of the application."}
+  *program-description*
+  "")
+
+(defonce ^:dynamic ^{:doc (join "\n  " ["If truthy, the parser will insert an implicit 'help' option."
+                                        "If a string or a symbol, the tokens for the option will"
+                                        "be generated from it, else the tokens will be \"h\" and \"help\"."])}
+  *help-option?*
+  true)
+
 (defn- alpha-numeric?
   "Returns true if char is an alphanumeric character."
   [char]
@@ -231,6 +242,7 @@
                             (reduce #(assoc %1 (name %2)
                                             (assoc (meta %2)
                                               :keyword (keyword %2)
+                                              :free true
                                               :parser (map-tag-to-parser
                                                        (or (:tag (meta %2)) String))))
                                     all-options (second spec))
@@ -246,6 +258,7 @@
                                    first)
                   option (assoc (meta option)
                            :keyword (keyword option)
+                           :free false
                            :parser (map-tag-to-parser tag))
                   all-options (assoc all-options token option short-token option)]
               (if (nil? tag)
@@ -257,6 +270,7 @@
                        boolean-options
                        (conj (conj parameter-options token) short-token)
                        all-options)))))))
+
      
 (defmacro let-cli-options
   "This macro binds cli options to variables according to the provided spec.
