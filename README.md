@@ -92,7 +92,7 @@ Metadata can be added to the variables in a `spec` to derive more control over t
 
 field   |  usage
 --------|------
-tag     | (ie a type hint eg: ^String) If not blank, specifies that the corresponing option takes a parameter. The tag value specifies the type. Currently, `String`, `long`, and 'double` are supported. A default parser exists for each of these types. If left blank, The option is a boolean option and will either be set to `true` or `nil` depending on if it is present in the tokens list.
+tag     | (ie a type hint eg: ^String) If not blank, specifies that the corresponing option takes a parameter. The tag value specifies the type. Currently, `String`, `long`, and `double` are supported. A default parser exists for each of these types. If left blank, The option is a boolean option and will either be set to `true` or `nil` depending on if it is present in the tokens list.
 doc     | A documentation string for use in usage printouts,
 default | The default value for this option, when it's not present in the token list. This `default` defaults to `nil`.
 parser  | A function that will be used to parse cli options. Usually defaults to `identity` or is picked based on the value of `tag`
@@ -101,7 +101,9 @@ parser  | A function that will be used to parse cli options. Usually defaults to
 
 In addition there are a few constants that can be set for more flexibility. Remember to add the `^:const` directive so that there values will be available at macro expansion time. EG:
 
-    (def ^:const *program-description* "This program is obviously awesome")
+```clojure
+(def ^:const *program-description* "This program is obviously awesome")
+```
 
 Some available constants are:
 
