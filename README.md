@@ -4,11 +4,13 @@ This is a clojure adaptation of my common lisp unix-options library. It is a cli
 
 The basic usage is simple. Provide a list of variable names that you want bound and the clojure-options will figure out how to parse the tokens passed in on the command line to populate those variables. EG:
 
-    (defmain [config verbose]
-      [config verbose])
+```clojure
+(defmain [config verbose]
+  [config verbose])
 
-    (-main ["-v"])
-    => [nil true]
+(-main ["-v"])
+=> [nil true]
+```
 
 More control can be had by providing meta data to control how the variable names are interperated by the parser, or by setting some constants.
 
@@ -16,63 +18,73 @@ Other features include a usage summery generator and automatic response to inval
 
 ## Usage
 
-getopts
+ _getopts_ `(getopts tokens short-options long-options`
   A traditional command-line option parser of the same general format as
   getopt from the Unix cli. Return the parsed command-line arguments as a list
   with "--" separating the valid options from the free arguments. For example:
 
-     tokens = ["-afgo.txt" "--alpha" "stay.txt"
-               "--file" "return.txt" "loop.txt"]
+```clojure
+ tokens = ["-afgo.txt" "--alpha" "stay.txt"
+           "--file" "return.txt" "loop.txt"]
 
-     (getopts tokens "af:j" ["alpha" "file="])
-      =>  ["a" "f" "go.txt" "alpha" "file" "return.txt" "--"
-           "stay.txt" "loop.txt"]
+ (getopts tokens "af:j" ["alpha" "file="])
+  =>  ["a" "f" "go.txt" "alpha" "file" "return.txt" "--"
+       "stay.txt" "loop.txt"]
+```
 
-let-cli-options
+ _let-cli-options_ `(let-cli-options spec tokens & body)`
   A simple interface for binding cli options. Simply provide a list of variable
   names that you want let-bound and clojure-options will figure out the right
   way to parse the cli tokens.
 
-     tokens = ["-afgo.txt" "--alpha" "stay.txt"
-               "--file" "return.txt" "loop.txt"]
+```clojure
+ tokens = ["-afgo.txt" "--alpha" "stay.txt"
+           "--file" "return.txt" "loop.txt"]
 
-     (let-cli-options [alpha ^String file & free-tokens] tokens
-       [alpha file free-tokens])
-      => [true "return.txt" ("loop.txt" "stay.txt")]
+ (let-cli-options [alpha ^String file & free-tokens] tokens
+   [alpha file free-tokens])
+  => [true "return.txt" ("loop.txt" "stay.txt")]
+```
 
-defmain
+ _defmain_ `(defmain spec & body)`
   The primary interface for binding cli options. Given a list of function 
   arguments and a function body it will define a function named '-main' that 
   takes a tokenized list of command line options, parses them, and binds them
   to the variable names in the function body.
 
-     tokens = ["-afgo.txt" "--alpha" "stay.txt"
-               "--file" "return.txt" "loop.txt"]
+```clojure
+ tokens = ["-afgo.txt" "--alpha" "stay.txt"
+           "--file" "return.txt" "loop.txt"]
 
-    (defmain [alpha ^String file & free-tokens]
-      [alpha file free-tokens])
+ (defmain [alpha ^String file & free-tokens]
+   [alpha file free-tokens])
 
-    (-main tokens)
-    => [true "return.txt" ("loop.txt" "stay.txt")]
+ (-main tokens)
+ => [true "return.txt" ("loop.txt" "stay.txt")]
+```
 
 ### Spec
 
 The `spec` is a list of variables that will be bound by either `let-cli-options` or `defmain`. This is how `clojure-options` figures out how to interperate the token list. Generally, a short option "-a" and a long option "--alpha" is generated for each variable name provided and any token passed in matching either form is bound to the variable name. If two variables are passed in starting with the same first letter, the short option of the second pushed to the next letter of the alphabet. So "-a" -> "-b". 
 
-    [alpha america delta]
-    ["-a" "--delta"]
-    --
-    alpha = true
-    america = nil
-    delta = true
+```clojure
+[alpha america delta]
+["-a" "--delta"]
+--
+alpha = true
+america = nil
+delta = true
+```
 
 Any free tokens (those not bound to a specific option) will collected in a list which will be bound to a list named by the first variable name after `&`. If `&` is not present, then the variable name will default to `free`. If the first value after `&` is a list, then the free option list will be destructured and bound to the variables names in the list.
 
-    [& [file1 file2]]
-    ["--" "foo.txt" "bar.txt"]
-    --
-    file1 = "foo.txt"
-    file2 = "bar.txt"
+```clojure
+[& [file1 file2]]
+["--" "foo.txt" "bar.txt"]
+--
+file1 = "foo.txt"
+file2 = "bar.txt"
+```
 
 ### Metadata
 
