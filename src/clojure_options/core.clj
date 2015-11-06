@@ -125,26 +125,26 @@
                                     (reducer output [option :boolean]) errors))
                      :else
                      (if (<= (count token) 2)
-                       (recur (rest tokens) output (conj errors (str "Invalid option '-" option "'")))
+                       (recur (rest tokens) output (conj errors (str "Invalid option: '-" option "'")))
                        (recur (cons (str "-" (subs token 2)) (rest tokens))
                               output
-                              (conj errors (str "Invalid option '-" option "'"))))))
+                              (conj errors (str "Invalid option: '-" option "'"))))))
              (and (= (first token) \-)
                   (= (second token) \-))
              (cond (some #{\=} token)
                    (let [[option parameter] (clojure.string/split token #"=")]
                      (cond (parameter-options (subs option 2))
                            (try-reducer (rest tokens) (reducer output [(subs option 2) parameter]) errors)
-                           (boolean-options (subs token 2))
+                           (boolean-options (subs option 2))
                            (recur (rest tokens) output (conj errors (str "Used '=' with option that doesn't take a parameter: '" option "'")))
-                           :else (recur (rest tokens) output (conj errors (str "Invalid option '" option "'")))))
+                           :else (recur (rest tokens) output (conj errors (str "Invalid option: '" option "'")))))
                    (parameter-options (subs token 2))
                    (if (#{"--" "-" nil} (second tokens))
                      (try-reducer (rest tokens) (reducer output [(subs token 2) nil]) (conj errors (str "No parameter for option '" token "'")))
                      (try-reducer (drop 2 tokens) (reducer output [(subs token 2) (second tokens)]) errors))
                    (boolean-options (subs token 2))
                    (try-reducer (rest tokens) (reducer output [(subs token 2) :boolean]) errors)
-                   :else (recur (rest tokens) output (conj errors (str "Invalid option '" token "'"))))
+                   :else (recur (rest tokens) output (conj errors (str "Invalid option: '" token "'"))))
              :else (try-reducer (rest tokens) (reducer output [token :free]) errors))))))
   
 (defn getopts
@@ -313,36 +313,37 @@
          all-options# :all-options
          free-options# :free-options}
         (parse-spec-to-options spec)
-        spec (take-while #(not (= '& %)) spec)]
+        spec (take-while #(not (= '& %)) spec)
+        reduce-parsed-options# reduce-parsed-options]
     `(try
        (let [~(assoc (zipmap spec (map keyword spec)) free-options# :free)
-           (reduce-parsed-options (fn [output# [option# value#]]
-                                         (if (= value# :free)
-                                           (assoc output#
-                                             :free
-                                             (conj (:free output#) option#))
-                                           (assoc output#
-                                             (:keyword (~all-options# option#))
-                                             value#)))
-                                       {}
-                                       ~tokens
-                                       ~boolean-options#
-                                       ~parameter-options#)]
-       (let [~@(mapcat #(vector % `(if ~% (try (~(or (:parser (all-options# (name %))) identity) ~%)
-                                               (catch Exception e#
-                                                 (throw-parser-error (str "Error parsing parameter: "
-                                                                      (.getMessage e#)))))
-                                       ~(:default (all-options# (name %)))))
-                       (concat spec (if (coll? free-options#) free-options# [free-options#])))] 
-         ~(if +help-option?+
-            `(if ~help-token
-               (print (help +program-name+ +program-description+ (rotate-array-map ~all-options# 2)))
-               ~@body)
-            `(do ~@body))))
+             (~reduce-parsed-options# (fn [output# [option# value#]]
+                                       (if (= value# :free)
+                                         (assoc output#
+                                                :free
+                                                (conj (or (:free output#) []) option#))
+                                         (assoc output#
+                                                (:keyword (~all-options# option#))
+                                                value#)))
+                                     {}
+                                     ~tokens
+                                     ~boolean-options#
+                                     ~parameter-options#)]
+         (let [~@(mapcat #(vector % `(if ~% (try (~(or (:parser (all-options# (name %))) identity) ~%)
+                                                 (catch Exception e#
+                                                   (throw-parser-error (str "Error parsing parameter: "
+                                                                            (.getMessage e#)))))
+                                         ~(:default (all-options# (name %)))))
+                         (concat spec (if (coll? free-options#) free-options# [free-options#])))] 
+           ~(if +help-option?+
+              `(if ~help-token
+                 (print (help +program-name+ +program-description+ (rotate-array-map ~all-options# 2)))
+                 ~@body)
+              `(do ~@body))))
        (catch clojure.lang.ExceptionInfo ei#
          (if (= (:type (ex-data ei#)) :parser-error)
            (do
-             (println (.getMessage ei#))
+             (print (str (.getMessage ei#) "\n"))
              (print (help +program-name+ +program-description+ (rotate-array-map ~all-options# 2))))
            (throw ei#))))))
 
@@ -360,5 +361,5 @@
   --:default - Default value for the parameter, the default, default value  for
                all parameters is nil."
   [spec & body]
-  `(defn -main [~'args]
+  `(defn ~'-main [~'args]
      (let-cli-options ~spec ~'args ~@body)))
