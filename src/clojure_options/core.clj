@@ -302,14 +302,16 @@
   In the simplest case, a list of variable names are provided and this macro
   will figure out how to bind the provided tokens to them. In more complex
   situations, type hints, doc strings and free token bindings can be provided
-  to provide more flexibility."
+  to provide more flexibility.
+
+     (let-cli-options [alpha ^String beta] tokens ...)"
   [spec tokens & body]
   (let [help-token (if (or (string? +help-option?+) (symbol? +help-option?+))
                      (symbol +help-option?+)
                      (with-meta 'help {:doc "Show usage summary"}))
         spec (if +help-option?+ (cons help-token spec) spec)
         {boolean-options# :boolean-options
-        parameter-options# :parameter-options
+         parameter-options# :parameter-options
          all-options# :all-options
          free-options# :free-options}
         (parse-spec-to-options spec)
@@ -361,5 +363,6 @@
   --:default - Default value for the parameter, the default, default value  for
                all parameters is nil."
   [spec & body]
-  `(defn ~'-main [~'args]
-     (let-cli-options ~spec ~'args ~@body)))
+  `(defn ~'-main [~'args] ; I want 'args' to appear in auto-generated usage docs
+     (let [args# ~'args]  ; but I don't want to actually capture it
+       (let-cli-options ~spec args# ~@body))))
