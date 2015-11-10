@@ -8,8 +8,11 @@ The basic usage is simple. Provide a list of variable names that you want bound 
 (defmain [config verbose]
   [config verbose])
 
-(-main ["-v"])
-=> [nil true]
+(-main ["-c"]) => [true nil]
+
+(-main ["--verbose"]) => [nil true]
+
+(-main ["-cv"]) => [true true]
 ```
 
 More control can be had by providing meta data to control how the variable names are interperated by the parser, or by setting some constants.
@@ -26,18 +29,21 @@ Add this to the dependencies in your `project.clj`:
 
 ## Usage
 
- _getopts_ `(getopts tokens short-options long-options`
-  A traditional command-line option parser of the same general format as
-  getopt from the Unix cli. Return the parsed command-line arguments as a list
-  with "--" separating the valid options from the free arguments. For example:
+ _defmain_ `(defmain spec & body)`
+  The primary interface for binding cli options. Given a list of function 
+  arguments and a function body it will define a function named '-main' that 
+  takes a tokenized list of command line options, parses them, and binds them
+  to the variable names in the function body.
 
 ```clojure
  tokens = ["-afgo.txt" "--alpha" "stay.txt"
            "--file" "return.txt" "loop.txt"]
 
- (getopts tokens "af:j" ["alpha" "file="])
-  =>  ["a" "f" "go.txt" "alpha" "file" "return.txt" "--"
-       "stay.txt" "loop.txt"]
+ (defmain [alpha ^String file & free-tokens]
+   [alpha file free-tokens])
+
+ (-main tokens)
+ => [true "return.txt" ("loop.txt" "stay.txt")]
 ```
 
  _let-cli-options_ `(let-cli-options spec tokens & body)`
@@ -54,21 +60,18 @@ Add this to the dependencies in your `project.clj`:
   => [true "return.txt" ("loop.txt" "stay.txt")]
 ```
 
- _defmain_ `(defmain spec & body)`
-  The primary interface for binding cli options. Given a list of function 
-  arguments and a function body it will define a function named '-main' that 
-  takes a tokenized list of command line options, parses them, and binds them
-  to the variable names in the function body.
+ _getopts_ `(getopts tokens short-options long-options`
+  A traditional command-line option parser of the same general format as
+  getopt from the Unix cli. Return the parsed command-line arguments as a list
+  with "--" separating the valid options from the free arguments. For example:
 
 ```clojure
  tokens = ["-afgo.txt" "--alpha" "stay.txt"
            "--file" "return.txt" "loop.txt"]
 
- (defmain [alpha ^String file & free-tokens]
-   [alpha file free-tokens])
-
- (-main tokens)
- => [true "return.txt" ("loop.txt" "stay.txt")]
+ (getopts tokens "af:j" ["alpha" "file="])
+  =>  ["a" "f" "go.txt" "alpha" "file" "return.txt" "--"
+       "stay.txt" "loop.txt"]
 ```
 
 ### Spec
