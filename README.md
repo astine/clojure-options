@@ -16,6 +16,14 @@ More control can be had by providing meta data to control how the variable names
 
 Other features include a usage summery generator and automatic response to invalid command line options.
 
+## Install
+
+Add this to the dependencies in your `project.clj`:
+
+```clojure
+[clojure-options "0.1.0"]
+```
+
 ## Usage
 
  _getopts_ `(getopts tokens short-options long-options`
