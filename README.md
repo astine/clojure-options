@@ -8,11 +8,11 @@ The basic usage is simple. Provide a list of variable names that you want bound 
 (defmain [config verbose]
   [config verbose])
 
-(-main ["-c"]) => [true nil]
+(-main "-c") => [true nil]
 
-(-main ["--verbose"]) => [nil true]
+(-main "--verbose") => [nil true]
 
-(-main ["-cv"]) => [true true]
+(-main "-cv") => [true true]
 ```
 
 More control can be had by providing meta data to control how the variable names are interperated by the parser, or by setting some constants.
@@ -42,7 +42,7 @@ Add this to the dependencies in your `project.clj`:
  (defmain [alpha ^String file & free-tokens]
    [alpha file free-tokens])
 
- (-main tokens)
+ (apply -main tokens)
  => [true "return.txt" ("loop.txt" "stay.txt")]
 ```
 

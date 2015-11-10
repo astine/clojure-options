@@ -83,4 +83,4 @@ Options:
 
 (deftest defmain-test
   (testing "defmain"
-    (is (= (-main ["-a" "-b"]) [true true nil nil]))))
+    (is (= (-main "-a" "-b") [true true nil nil]))))
