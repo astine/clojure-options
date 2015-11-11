@@ -83,8 +83,8 @@ Options:
 
 (deftest defmain-test
   (testing "defmain"
-    (is (= (-main ["-a" "-b"]) [true true nil nil]))
-    (is (= (-main ["-ab"]) [true true nil nil]))
-    (is (= (-main ["-eab"]) [nil nil nil "ab"]))
-    (is (= (-main ["-a" "--epsilon" "foo"]) [true nil nil "foo"]))
-    (is (= (-main []) [nil nil nil nil]))))
+    (is (= (-main "-a" "-b") [true true nil nil]))
+    (is (= (-main "-ab") [true true nil nil]))
+    (is (= (-main "-eab") [nil nil nil "ab"]))
+    (is (= (-main "-a" "--epsilon" "foo") [true nil nil "foo"]))
+    (is (= (-main ) [nil nil nil nil]))))

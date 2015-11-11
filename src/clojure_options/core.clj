@@ -363,6 +363,6 @@
   --:default - Default value for the parameter, the default, default value  for
                all parameters is nil."
   [spec & body]
-  `(defn ~'-main [~'args] ; I want 'args' to appear in auto-generated usage docs
-     (let [args# ~'args]  ; but I don't want to actually capture it
+  `(defn ~'-main [~'& ~'args] ; I want 'args' to appear in auto-generated usage docs
+     (let [args# (vec ~'args)]      ; but I don't want to actually capture it
        (let-cli-options ~spec args# ~@body))))
